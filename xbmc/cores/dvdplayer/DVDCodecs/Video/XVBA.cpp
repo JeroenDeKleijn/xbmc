@@ -1387,12 +1387,6 @@ void CDecoder::FinishGL()
 
     for (unsigned int j=0; j<3; ++j)
     {
-      if (glIsTexture(m_flipBuffer[i].glTexture[j]))
-      {
-        glDeleteTextures(1, &m_flipBuffer[i].glTexture[j]);
-        m_flipBuffer[i].glTexture[j] = 0;
-        CLog::Log(LOGDEBUG, "XVBA::FinishGL - destroyed texture, index: %d, field %d", i, j);
-      }
       if (m_flipBuffer[i].glSurface[j] && m_xvbaSession)
       {
         { CSingleLock lock(m_apiSec);
@@ -1400,6 +1394,12 @@ void CDecoder::FinishGL()
         }
         m_flipBuffer[i].glSurface[j] = 0;
         CLog::Log(LOGDEBUG, "XVBA::FinishGL - destroyed shared surface");
+      }
+      if (glIsTexture(m_flipBuffer[i].glTexture[j]))
+      {
+        glDeleteTextures(1, &m_flipBuffer[i].glTexture[j]);
+        m_flipBuffer[i].glTexture[j] = 0;
+        CLog::Log(LOGDEBUG, "XVBA::FinishGL - destroyed texture, index: %d, field %d", i, j);
       }
     }
   }
