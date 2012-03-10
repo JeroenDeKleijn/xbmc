@@ -67,7 +67,7 @@ private:
   static CCriticalSection m_section;
   static Display *m_display;
   int m_refCount;
-  void *m_dlHandle;
+  static void *m_dlHandle;
   void *m_xvbaContext;
 };
 

@@ -82,11 +82,12 @@ static struct
 CXVBAContext *CXVBAContext::m_context = 0;
 CCriticalSection CXVBAContext::m_section;
 Display *CXVBAContext::m_display = 0;
+void *CXVBAContext::m_dlHandle = 0;
 
 CXVBAContext::CXVBAContext()
 {
   m_context = 0;
-  m_dlHandle = 0;
+//  m_dlHandle = 0;
   m_xvbaContext = 0;
   m_refCount = 0;
 }
@@ -109,11 +110,11 @@ void CXVBAContext::Close()
   CLog::Log(LOGNOTICE, "XVBA::Close - closing decoder context");
 
   DestroyContext();
-  if (m_dlHandle)
-  {
-    dlclose(m_dlHandle);
-    m_dlHandle = 0;
-  }
+//  if (m_dlHandle)
+//  {
+//    dlclose(m_dlHandle);
+//    m_dlHandle = 0;
+//  }
 }
 
 bool CXVBAContext::EnsureContext(CXVBAContext **ctx)
