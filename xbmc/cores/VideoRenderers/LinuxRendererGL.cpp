@@ -2464,7 +2464,7 @@ void CLinuxRendererGL::UploadVAAPITexture(int index)
 void CLinuxRendererGL::DeleteXVBATexture(int index)
 {
 #ifdef HAVE_LIBXVBA
-  YUVPLANE &plane = m_buffers[index].fields[0][0];
+  YUVPLANE &planeFallback = m_buffers[index].fields[0][1];
   YUVFIELDS &fields = m_buffers[index].fields;
 
   if (m_buffers[index].xvba)
@@ -2473,10 +2473,12 @@ void CLinuxRendererGL::DeleteXVBATexture(int index)
   SAFE_RELEASE(m_buffers[index].xvba);
   SAFE_RELEASE(m_buffers[index].xvba_tmp);
 
-  if(plane.id && glIsTexture(plane.id))
-    glDeleteTextures(1, &plane.id);
-  plane.id = 0;
-  fields[0][1].id = 0;
+  if(planeFallback.id && glIsTexture(planeFallback.id))
+    glDeleteTextures(1, &planeFallback.id);
+  planeFallback.id = 0;
+  fields[0][0].id = 0;
+  fields[1][0].id = 0;
+  fields[2][0].id = 0;
 #endif
 }
 
