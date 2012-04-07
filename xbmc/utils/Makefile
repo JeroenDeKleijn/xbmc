@@ -67,6 +67,7 @@ SRCS=AlarmClock.cpp \
      XBMCTinyXML.cpp \
      XMLUtils.cpp \
      BitstreamConverter.cpp \
+     ActorProtocol.cpp \
 
 LIB=utils.a
 
