@@ -662,7 +662,7 @@ void CDVDPlayerAudio::HandleSyncError(double duration)
 
   //check if measured error for 1 second
   now = CurrentHostCounter();
-  if ((now - m_syncError.m_errortime) >= m_syncError.m_freq)
+  if ((now - m_syncError.m_errortime) >= m_syncError.m_freq * 2)
   {
     m_syncError.CalcAverage(now);
 
