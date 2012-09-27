@@ -57,7 +57,7 @@ class CD3DCallback : public ID3DResource
 #endif
 
 class CVideoReferenceClock : public CThread
-#if defined(HAS_GLX)
+#if defined(HAS_GLX) && defined(HAS_XRANDR)
                             ,public IDispResource
 #endif
 {
@@ -80,7 +80,7 @@ class CVideoReferenceClock : public CThread
     void VblankHandler(int64_t nowtime, double fps);
 #endif
 
-#if defined(HAS_GLX)
+#if defined(HAS_GLX) && defined(HAS_XRANDR)
     virtual void OnLostDevice();
     virtual void OnResetDevice();
 #endif

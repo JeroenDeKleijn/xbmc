@@ -163,7 +163,7 @@ void CVideoReferenceClock::Process()
   m_D3dCallback.Reset();
   g_Windowing.Register(&m_D3dCallback);
 #endif
-#if defined(HAS_GLX)
+#if defined(HAS_GLX) && defined(HAS_XRANDR)
   g_Windowing.Register(this);
   m_xrrEvent = false;
 #endif
