@@ -240,6 +240,33 @@ static void set_pcr_pid(AVFormatContext *s, unsigned int programid, unsigned int
     }
 }
 
+static void stream_change_cb(MpegTSContext *ts, unsigned int programid)
+{
+    AVFormatContext *s = ts->stream;
+    AVProgram *prg = NULL;
+    struct Program *p = NULL;
+    int i;
+    for(i=0; i<s->nb_programs; i++) {
+        if(s->programs[i]->id == programid) {
+            prg = s->programs[i];
+            break;
+        }
+    }
+    if (prg == NULL || prg->stream_change == NULL)
+        return;
+
+    for(i=0; i<ts->nb_prg; i++) {
+        if(ts->prg[i].id == programid) {
+            p = &ts->prg[i];
+            break;
+        }
+    }
+    if(!p)
+        return;
+
+    prg->stream_change(programid, p->pids, p->nb_pids);
+}
+
 /**
  * @brief discard_pid() decides if the pid is to be discarded according
  *                      to caller's programs selection
@@ -1541,6 +1568,7 @@ static void pmt_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
         }
         p = desc_list_end;
     }
+    stream_change_cb(ts, h->id);
 
  out:
     for (i = 0; i < mp4_descr_count; i++)
