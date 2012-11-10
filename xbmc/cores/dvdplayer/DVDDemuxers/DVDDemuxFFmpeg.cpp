@@ -203,6 +203,15 @@ static offset_t dvd_file_seek(void *h, offset_t pos, int whence)
 ////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
+static void stream_change_cb(int program, unsigned int *pids, unsigned int nb_pids)
+{
+  CDVDDemuxFFmpeg* demuxer = g_demuxer.get();
+  if(demuxer)
+    demuxer->StreamChange(program, pids, nb_pids);
+}
+////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////
+
 CDVDDemuxFFmpeg::CDVDDemuxFFmpeg() : CDVDDemux()
 {
   m_pFormatContext = NULL;
@@ -214,6 +223,7 @@ CDVDDemuxFFmpeg::CDVDDemuxFFmpeg() : CDVDDemux()
   m_bAVI = false;
   m_speed = DVD_PLAYSPEED_NORMAL;
   m_program = UINT_MAX;
+  m_bufferedPacket = NULL;
 }
 
 CDVDDemuxFFmpeg::~CDVDDemuxFFmpeg()
@@ -486,6 +496,8 @@ bool CDVDDemuxFFmpeg::Open(CDVDInputStream* pInput)
       // add streams from selected program
       for (unsigned int i = 0; i < m_pFormatContext->programs[m_program]->nb_stream_indexes; i++)
         AddStream(m_pFormatContext->programs[m_program]->stream_index[i]);
+
+      m_pFormatContext->programs[m_program]->stream_change = stream_change_cb;
     }
   }
   // if there were no programs or they were all empty, add all streams
@@ -494,6 +506,8 @@ bool CDVDDemuxFFmpeg::Open(CDVDInputStream* pInput)
     for (unsigned int i = 0; i < m_pFormatContext->nb_streams; i++)
       AddStream(i);
   }
+
+  m_bStreamChange = false;
 
   m_bPtsWrapChecked = false;
   m_bPtsWrap = false;
@@ -540,6 +554,9 @@ void CDVDDemuxFFmpeg::Dispose()
   m_dllAvFormat.Unload();
   m_dllAvCodec.Unload();
   m_dllAvUtil.Unload();
+
+  CDVDDemuxUtils::FreeDemuxPacket(m_bufferedPacket);
+  m_bufferedPacket = NULL;
 }
 
 void CDVDDemuxFFmpeg::Reset()
@@ -558,6 +575,9 @@ void CDVDDemuxFFmpeg::Flush()
     m_dllAvFormat.av_read_frame_flush(m_pFormatContext);
 
   m_iCurrentPts = DVD_NOPTS_VALUE;
+
+  CDVDDemuxUtils::FreeDemuxPacket(m_bufferedPacket);
+  m_bufferedPacket = NULL;
 }
 
 void CDVDDemuxFFmpeg::Abort()
@@ -639,6 +659,13 @@ DemuxPacket* CDVDDemuxFFmpeg::Read()
 
   AVPacket pkt;
   DemuxPacket* pPacket = NULL;
+
+  if (m_bufferedPacket)
+  {
+    pPacket = m_bufferedPacket;
+    m_bufferedPacket = NULL;
+    return pPacket;
+  }
   // on some cases where the received packet is invalid we will need to return an empty packet (0 length) otherwise the main loop (in CDVDPlayer)
   // would consider this the end of stream and stop.
   bool bReturnEmpty = false;
@@ -831,12 +858,23 @@ DemuxPacket* CDVDDemuxFFmpeg::Read()
       }
     }
   }
+
+  if (m_bStreamChange)
+  {
+    m_bufferedPacket = pPacket;
+    pPacket = CDVDDemuxUtils::AllocateDemuxPacket(0);
+    pPacket->iStreamId = DMX_SPECIALID_STREAMCHANGE;
+    m_bStreamChange = false;
+  }
   return pPacket;
 }
 
 bool CDVDDemuxFFmpeg::SeekTime(int time, bool backwords, double *startpts)
 {
   g_demuxer.set(this);
+
+  CDVDDemuxUtils::FreeDemuxPacket(m_bufferedPacket);
+  m_bufferedPacket = NULL;
 
   if(time < 0)
     time = 0;
@@ -1066,6 +1104,9 @@ bool CDVDDemuxFFmpeg::SeekTimeDiscont(int64_t pts, bool backwards)
 bool CDVDDemuxFFmpeg::SeekByte(int64_t pos)
 {
   g_demuxer.set(this);
+
+  CDVDDemuxUtils::FreeDemuxPacket(m_bufferedPacket);
+  m_bufferedPacket = NULL;
 
   CSingleLock lock(m_critSection);
   int ret = m_dllAvFormat.av_seek_frame(m_pFormatContext, -1, pos, AVSEEK_FLAG_BYTE);
@@ -1363,6 +1404,8 @@ void CDVDDemuxFFmpeg::AddStream(int iId)
     }
     else
       m_streams[iId]->iPhysicalId = pStream->id;
+
+    m_bStreamChange = true;
   }
 }
 
@@ -1519,5 +1562,41 @@ void CDVDDemuxFFmpeg::GetStreamCodecName(int iStreamId, CStdString &strName)
     AVCodec *codec = m_dllAvCodec.avcodec_find_decoder(stream->codec);
     if (codec)
       strName = codec->name;
+  }
+}
+
+void CDVDDemuxFFmpeg::StreamChange(int program, unsigned int *pids, unsigned int nb_pids)
+{
+  CSingleLock lock(m_critSection);
+
+  if (m_program == UINT_MAX || m_pFormatContext->programs[m_program]->id != program)
+    return;
+
+  for (unsigned int i = 0; i < nb_pids; i++)
+  {
+    m_pids[i] = pids[i];
+  }
+  m_noOfPids = nb_pids;
+
+  unsigned int noOfStreams = GetNrOfStreams();
+  for (unsigned int i = 0; i < noOfStreams; i++)
+  {
+    AVStream *st = (AVStream*)m_streams[i]->pPrivate;
+    if (m_streams[i]->type == STREAM_NONE || m_streams[i]->codec == CODEC_ID_NONE)
+      continue;
+
+    unsigned int j;
+    for (j = 0; j < m_noOfPids; j++)
+    {
+      if (m_pids[j] == (unsigned int)st->id)
+        break;
+    }
+    if (j >= m_noOfPids)
+    {
+      m_bStreamChange = true;
+      m_streams[i]->type = STREAM_NONE;
+      m_streams[i]->codec = CODEC_ID_NONE;
+      CLog::Log(LOGNOTICE,"CDVDDemuxFFmpeg::StreamChange - stream %d is inactive", i);
+    }
   }
 }

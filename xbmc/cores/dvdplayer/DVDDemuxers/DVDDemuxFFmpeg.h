@@ -110,6 +110,7 @@ public:
   virtual void GetStreamCodecName(int iStreamId, CStdString &strName);
 
   bool Aborted();
+  void StreamChange(int program, unsigned int *pids, unsigned int nb_pids);
 
   AVFormatContext* m_pFormatContext;
 
@@ -145,5 +146,10 @@ protected:
 
   bool m_bPtsWrap, m_bPtsWrapChecked;
   int64_t m_iStartTime, m_iMaxTime, m_iEndTime;
+
+  unsigned int m_pids[MAX_STREAMS];
+  unsigned int m_noOfPids;
+  bool m_bStreamChange;
+  DemuxPacket *m_bufferedPacket;
 };
 
