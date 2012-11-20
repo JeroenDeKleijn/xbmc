@@ -1322,6 +1322,10 @@ CGUIControl* CGUIControlFactory::Create(int parentID, const CRect &rect, TiXmlEl
   {
     control = new CGUIVisualisationControl(parentID, id, posX, posY, width, height);
   }
+  else if (type == CGUIControl::GUICONTROL_RENDERADDON)
+  {
+    control = new CGUIRenderingControl(parentID, id, posX, posY, width, height);
+  }
 
   // things that apply to all controls
   if (control)

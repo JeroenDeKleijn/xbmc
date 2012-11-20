@@ -36,6 +36,7 @@
 #include "guilib/GUISettingsSliderControl.h"
 #include "guilib/GUIEditControl.h"
 #include "guilib/GUIProgressControl.h"
+#include "guilib/GUIRenderingControl.h"
 
 #define CONTROL_BTNVIEWASICONS  2
 #define CONTROL_BTNSORTBY       3
@@ -93,6 +94,7 @@ CAddonCallbacksGUI::CAddonCallbacksGUI(CAddon* addon)
   m_callbacks->Window_GetControl_RadioButton  = CAddonCallbacksGUI::Window_GetControl_RadioButton;
   m_callbacks->Window_GetControl_Edit         = CAddonCallbacksGUI::Window_GetControl_Edit;
   m_callbacks->Window_GetControl_Progress     = CAddonCallbacksGUI::Window_GetControl_Progress;
+  m_callbacks->Window_GetControl_RenderAddon  = CAddonCallbacksGUI::Window_GetControl_RenderAddon;
 
   m_callbacks->Window_SetControlLabel         = CAddonCallbacksGUI::Window_SetControlLabel;
 
@@ -125,6 +127,10 @@ CAddonCallbacksGUI::CAddonCallbacksGUI(CAddon* addon)
   m_callbacks->ListItem_SetProperty           = CAddonCallbacksGUI::ListItem_SetProperty;
   m_callbacks->ListItem_GetProperty           = CAddonCallbacksGUI::ListItem_GetProperty;
   m_callbacks->ListItem_SetPath               = CAddonCallbacksGUI::ListItem_SetPath;
+
+  m_callbacks->RenderAddon_SetCallbacks       = CAddonCallbacksGUI::RenderAddon_SetCallbacks;
+  m_callbacks->RenderAddon_Delete             = CAddonCallbacksGUI::RenderAddon_Delete;
+  m_callbacks->RenderAddon_MarkDirty          = CAddonCallbacksGUI::RenderAddon_MarkDirty;
 }
 
 CAddonCallbacksGUI::~CAddonCallbacksGUI()
@@ -927,6 +933,22 @@ GUIHANDLE CAddonCallbacksGUI::Window_GetControl_Progress(void *addonData, GUIHAN
   return pGUIControl;
 }
 
+GUIHANDLE CAddonCallbacksGUI::Window_GetControl_RenderAddon(void *addonData, GUIHANDLE handle, int controlId)
+{
+  CAddonCallbacks* helper = (CAddonCallbacks*) addonData;
+  if (!helper || !handle)
+    return NULL;
+
+  CGUIAddonWindow *pAddonWindow = (CGUIAddonWindow*)handle;
+  CGUIControl* pGUIControl = (CGUIControl*)pAddonWindow->GetControl(controlId);
+  if (pGUIControl && pGUIControl->GetControlType() != CGUIControl::GUICONTROL_RENDERADDON)
+    return NULL;
+
+  CGUIAddonRenderingControl *pProxyControl;
+  pProxyControl = new CGUIAddonRenderingControl((CGUIRenderingControl*)pGUIControl);
+  return pProxyControl;
+}
+
 void CAddonCallbacksGUI::Window_SetControlLabel(void *addonData, GUIHANDLE handle, int controlId, const char *label)
 {
   CAddonCallbacks* helper = (CAddonCallbacks*) addonData;
@@ -1218,9 +1240,47 @@ void CAddonCallbacksGUI::ListItem_SetPath(void *addonData, GUIHANDLE handle, con
   ((CFileItem*)handle)->SetPath(path);
 }
 
+void CAddonCallbacksGUI::RenderAddon_SetCallbacks(void *addonData, GUIHANDLE handle, GUIHANDLE clienthandle, bool (*createCB)(GUIHANDLE,int,int,int,int), void (*renderCB)(GUIHANDLE), void (*stopCB)(GUIHANDLE))
+{
+  CAddonCallbacks* helper = (CAddonCallbacks*) addonData;
+  if (!helper || !handle)
+    return;
 
+  CGUIAddonRenderingControl *pAddonControl = (CGUIAddonRenderingControl*)handle;
 
+  Lock();
+  pAddonControl->m_clientHandle  = clienthandle;
+  pAddonControl->CBCreate        = createCB;
+  pAddonControl->CBRender        = renderCB;
+  pAddonControl->CBStop          = stopCB;
+  Unlock();
 
+  pAddonControl->m_pControl->InitAddon(pAddonControl);
+}
+
+void CAddonCallbacksGUI::RenderAddon_Delete(void *addonData, GUIHANDLE handle)
+{
+  CAddonCallbacks* helper = (CAddonCallbacks*) addonData;
+  if (!helper || !handle)
+    return;
+
+  CGUIAddonRenderingControl *pAddonControl = (CGUIAddonRenderingControl*)handle;
+
+  Lock();
+  pAddonControl->Delete();
+  Unlock();
+}
+
+void CAddonCallbacksGUI::RenderAddon_MarkDirty(void *addonData, GUIHANDLE handle)
+{
+  CAddonCallbacks* helper = (CAddonCallbacks*) addonData;
+  if (!helper || !handle)
+    return;
+
+  CGUIAddonRenderingControl *pAddonControl = (CGUIAddonRenderingControl*)handle;
+
+  pAddonControl->MarkDirty();
+}
 
 
 
@@ -1535,6 +1595,65 @@ void CGUIAddonWindowDialog::Show_Internal(bool show /* = true */)
 
     g_windowManager.RemoveDialog(GetID());
   }
+}
+
+CGUIAddonRenderingControl::CGUIAddonRenderingControl(CGUIRenderingControl *pControl)
+{
+  m_pControl = pControl;
+  m_refCount = 1;
+}
+
+bool CGUIAddonRenderingControl::Create(int x, int y, int w, int h)
+{
+  if (CBCreate)
+  {
+    if (CBCreate(m_clientHandle, x, y, w, h))
+    {
+      m_refCount++;
+      return true;
+    }
+  }
+  return false;
+}
+
+void CGUIAddonRenderingControl::Render()
+{
+  if (CBRender)
+  {
+    g_graphicsContext.BeginPaint();
+    CBRender(m_clientHandle);
+    g_graphicsContext.EndPaint();
+  }
+}
+
+void CGUIAddonRenderingControl::Stop()
+{
+  if (CBStop)
+  {
+    CBStop(m_clientHandle);
+  }
+  m_refCount--;
+  if (m_refCount <= 0)
+    delete this;
+}
+
+void CGUIAddonRenderingControl::Delete()
+{
+  m_refCount--;
+  if (m_refCount <= 0)
+    delete this;
+}
+
+bool CGUIAddonRenderingControl::IsDirty()
+{
+  bool ret = m_bIsDirty;
+  m_bIsDirty = false;
+  return ret;
+}
+
+void CGUIAddonRenderingControl::MarkDirty()
+{
+  m_bIsDirty = true;
 }
 
 }; /* namespace ADDON */

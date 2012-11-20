@@ -555,5 +555,83 @@ void CAddonListItem::SetPath(const char *Path)
     ((CB_GUILib*)m_cb)->ListItem_SetPath(((AddonCB*)m_Handle)->addonData, m_ListItemHandle, Path);
 }
 
+///-------------------------------------
+/// cGUIRenderingControl
+
+DLLEXPORT CAddonGUIRenderingControl* GUI_control_get_rendering(void *hdl, void *cb, CAddonGUIWindow *window, int controlId)
+{
+  return new CAddonGUIRenderingControl(hdl, cb, window, controlId);
+}
+
+DLLEXPORT void GUI_control_release_rendering(CAddonGUIRenderingControl* p)
+{
+  delete p;
+}
+
+DLLEXPORT bool GUI_control_rendering_create(GUIHANDLE handle, int x, int y, int w, int h)
+{
+  CAddonGUIRenderingControl *pControl = (CAddonGUIRenderingControl*) handle;
+  return pControl->Create(x,y,w,h);
+}
+
+DLLEXPORT void GUI_control_rendering_render(GUIHANDLE handle)
+{
+  CAddonGUIRenderingControl *pControl = (CAddonGUIRenderingControl*) handle;
+  pControl->Render();
+}
+
+DLLEXPORT void GUI_control_rendering_stop(GUIHANDLE handle)
+{
+  CAddonGUIRenderingControl *pControl = (CAddonGUIRenderingControl*) handle;
+  pControl->Stop();
+}
+
+CAddonGUIRenderingControl::CAddonGUIRenderingControl(void *hdl, void *cb, CAddonGUIWindow *window, int controlId)
+ : m_Window(window)
+ , m_ControlId(controlId)
+ , m_Handle(hdl)
+ , m_cb(cb)
+{
+  m_RenderingHandle = ((CB_GUILib*)m_cb)->Window_GetControl_RenderAddon(((AddonCB*)m_Handle)->addonData, m_Window->m_WindowHandle, controlId);
+}
+
+CAddonGUIRenderingControl::~CAddonGUIRenderingControl()
+{
+  ((CB_GUILib*)m_cb)->RenderAddon_Delete(((AddonCB*)m_Handle)->addonData, m_RenderingHandle);
+}
+
+void CAddonGUIRenderingControl::Init()
+{
+  ((CB_GUILib*)m_cb)->RenderAddon_SetCallbacks(((AddonCB*)m_Handle)->addonData, m_RenderingHandle, this, GUI_control_rendering_create, GUI_control_rendering_render, GUI_control_rendering_stop);
+}
+
+void CAddonGUIRenderingControl::MarkDirty()
+{
+  ((CB_GUILib*)m_cb)->RenderAddon_MarkDirty(((AddonCB*)m_Handle)->addonData, m_RenderingHandle);
+}
+
+bool CAddonGUIRenderingControl::Create(int x, int y, int w, int h)
+{
+  if (!CBCreate)
+    return false;
+
+  return CBCreate(m_cbhdl, x, y, w, h);
+}
+
+void CAddonGUIRenderingControl::Render()
+{
+  if (!CBRender)
+    return;
+
+  CBRender(m_cbhdl);
+}
+
+void CAddonGUIRenderingControl::Stop()
+{
+  if (!CBStop)
+    return;
+
+  CBStop(m_cbhdl);
+}
 
 };
